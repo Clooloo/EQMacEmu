@@ -240,7 +240,7 @@ RULE_REAL(Quarm, SpeedieBardSpeedThreshold, 1.3)
 RULE_INT(Quarm, MaxTradeskillCap, 200) // During Classic until late Kunark, this should remain 200.
 RULE_BOOL(Quarm, NoPlayerDamagePetPenalty, false) // During Classic through Velious, true in Luclin+
 RULE_BOOL(Quarm, EnableBardDamagingAOECap, true)
-RULE_INT(Quarm, BardDamagingAOECap, 4)
+RULE_INT(Quarm, BardDamagingAOECap, 25)
 RULE_BOOL(Quarm, CorpseUnlockIsHalvedDecayTime, true)
 RULE_INT(Quarm, AccidentalFallTimerMS, 15000) // Length of initial zonein fall protection, in MS.
 RULE_REAL(Quarm, AccidentalFallUnitDist, 50.0) // Length of initial zonein fall protection, in MS.
