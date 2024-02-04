@@ -422,7 +422,7 @@ void Client::CheckIncreaseTradeskill(bool isSuccessfulCombine, EQ::skills::Skill
 
 		// The skill roll always succeeds if skill <= 15
 		// Skill caps at 190 here, leaving a 5% chance to succeed when skill >= 190
-		if (rawSkill <= 15 || zone->random.Int(1, 200) > std::min(190, rawSkill))
+		if (rawSkill <= 100 || zone->random.Int(1, 200) > std::min(190, rawSkill))
 		{
 			SetSkill(tradeskill, rawSkill + 1);
 
