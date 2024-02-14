@@ -131,30 +131,32 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, int buffslot, int caster_lev
 				int32 dmg = effect_value;
 				if(dmg < 0)
 				{
+					if (!PassCastRestriction(false, spells[spell_id].base2[i], true))
+						break;
+
 					// take partial damage into account
-					dmg = (int32) (dmg * caster->itembonuses.INT / (RuleI(Spells,SpellModDivideByDD)));
-
-#ifdef EQBOTS
-
-					// Bot AA Casting Bonuses
-					if(caster && caster->IsBot()) {
-						dmg = caster->GetBotActSpellDamage(spell_id, dmg);
+					dmg = (int32) (dmg * partial / 100);
+					if (dmg == 0)
+					{
+						dmg = -1;		// there are no zero damage non-full resists
 					}
-					else
-
-#endif //EQBOTS
 
 					//handles AAs and what not...
-					if(caster)
-						dmg = caster->GetActSpellDamage(spell_id, dmg);
+					if(caster) {
+						dmg = caster->GetActSpellDamage(spell_id, dmg, this);
+					}
 
 					dmg = -dmg;
 					Damage(caster, dmg, spell_id, spell.skill, false, buffslot, false);
 				}
 				else if(dmg > 0) {
 					//healing spell...
+
+					if (!PassCastRestriction(false, spells[spell_id].base2[i], false))
+						break;
+
 					if(caster)
-						dmg = caster->GetActSpellHealing(spell_id, dmg);
+						dmg = caster->GetActSpellHealing(spell_id, dmg, this);
 
 					HealDamage(dmg, caster);
 				}
@@ -2802,41 +2804,45 @@ void Mob::DoBuffTic(uint16 spell_id, int slot, uint32 ticsremaining, uint8 caste
 		switch(effect)
 		{
 			case SE_CurrentHP:
-		{
-			effect_value = CalcSpellEffectValue(spell_id, i, caster_level, caster, ticsremaining);
+			{
+				effect_value = CalcSpellEffectValue(spell_id, i, caster_level, ticsremaining, instrumentmod);
+				if (is_tap_recourse) effect_value = -effect_value;
+				int hate_amount = effect_value;
+				//Handle client cast DOTs here.
+				if (caster && caster->IsClient() && IsDetrimentalSpell(spell_id) && effect_value < 0) {
 
-			//TODO: account for AAs and stuff
+					effect_value = caster->CastToClient()->GetActDoTDamage(spell_id, effect_value, this);
 
-			//dont know what the signon this should be... - makes sense
-			if (caster && caster->IsClient() &&
-				IsDetrimentalSpell(spell_id) &&
-				effect_value < 0) {
-				if(caster){
-					if(caster->IsClient() && !caster->CastToClient()->GetFeigned()){
-						AddToHateList(caster, -effect_value);
-					}
-					else if(!caster->IsClient())
-						AddToHateList(caster, -effect_value);
-
-					TryDotCritical(spell_id, caster, effect_value);
+					if (!caster->CastToClient()->IsFeigned()
+						&& (!GetOwner() || !GetOwner()->IsClient())
+					)
+						AddToHateList(caster, -hate_amount);
 				}
-				effect_value = (effect_value * caster->itembonuses.INT / (RuleI(Spells,SpellModDivideByDOT)));
+
+				if(effect_value < 0)
+				{
+					if(caster)
+					{
+						if(!caster->IsClient()){
+
+							if (!IsClient() && !GetOwner()) //Allow NPC's to generate hate if casted on other NPC's.
+								AddToHateList(caster, -hate_amount);
+						}
+
+						if(caster->IsNPC())
+							effect_value = caster->CastToNPC()->GetActSpellDamage(spell_id, effect_value, this);
+
+					}
+
+					effect_value = -effect_value;
+					Log(Logs::Detail, Logs::Spells, "%s is being damaged for %d points due to DOT %s in slot %d.", GetName(), effect_value, GetSpellName(spell_id), slot);
+					Damage(caster, effect_value, spell_id, spell.skill, false, i, true);
+				} else if(effect_value > 0) {
+					// Regen spell...
+					// handled with bonuses
+				}
+				break;
 			}
-
-			if(effect_value < 0) {
-
-				effect_value = -effect_value;
-				Damage(caster, effect_value, spell_id, spell.skill, false, i, true);
-			} else if(effect_value > 0) {
-				//healing spell...
-				//healing aggro would go here; removed for now
-				if(caster)
-					effect_value = caster->GetActSpellHealing(spell_id, effect_value);
-				HealDamage(effect_value, caster);
-			}
-
-			break;
-		}
 			case SE_HealOverTime:
 			{
 				effect_value = CalcSpellEffectValue(spell_id, i, caster_level, ticsremaining, instrumentmod);
