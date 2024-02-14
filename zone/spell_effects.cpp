@@ -2801,7 +2801,7 @@ void Mob::DoBuffTic(uint16 spell_id, int slot, uint32 ticsremaining, uint8 caste
 
 		switch(effect)
 		{
-			ase SE_CurrentHP:
+			case SE_CurrentHP:
 		{
 			effect_value = CalcSpellEffectValue(spell_id, i, caster_level, caster, ticsremaining);
 
