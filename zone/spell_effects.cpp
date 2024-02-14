@@ -128,11 +128,11 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, int buffslot, int caster_lev
 					break;
 
 				// for offensive spells check if we have a spell rune on
-				sint32 dmg = effect_value;
+				int32 dmg = effect_value;
 				if(dmg < 0)
 				{
 					// take partial damage into account
-					dmg = (sint32) (dmg * caster->itembonuses.INT / (RuleI(Spells,SpellModDivideByDD)));
+					dmg = (int32) (dmg * caster->itembonuses.INT / (RuleI(Spells,SpellModDivideByDD)));
 
 #ifdef EQBOTS
 
