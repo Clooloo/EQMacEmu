@@ -418,11 +418,11 @@ void Client::CheckIncreaseTradeskill(bool isSuccessfulCombine, EQ::skills::Skill
 	if (statCheck > zone->random.Real(1, 1000))
 	{
 		Log(Logs::Detail, Logs::Tradeskills, "...Stat check success; Attempting Skill Check.  Success chance: %0.1f pct", 
-			rawSkill <= 100 ? 100.0f : 100.0f - std::min(300, rawSkill) / 2.0);
+			rawSkill <= 15 ? 100.0f : 100.0f - std::min(190, rawSkill) / 2.0);
 
 		// The skill roll always succeeds if skill <= 15
 		// Skill caps at 190 here, leaving a 5% chance to succeed when skill >= 190
-		if (rawSkill <= 100 || zone->random.Int(1, 200) > std::min(300, rawSkill))
+		if (rawSkill <= 15 || zone->random.Int(1, 200) > std::min(190, rawSkill))
 		{
 			SetSkill(tradeskill, rawSkill + 1);
 
