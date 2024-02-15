@@ -4987,4 +4987,3 @@ bool Mob::PassCastRestriction(bool UseCastRestriction,  int16 value, bool IsDama
 						
 	return false;
 }
-
