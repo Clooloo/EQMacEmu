@@ -396,9 +396,6 @@ public:
 	bool	AICheckCloseBeneficialSpells(NPC* caster, uint8 iChance, float iRange, uint16 iSpellTypes);
 	Mob*	GetTargetForMez(Mob* caster);
 	uint32	CheckNPCsClose(Mob *center);
-	void	BulkNewClientDistances(Client *client);
-	void	UpdateNewClientDistances(Client *client);
-	void	UpdateDistances(Client *client);
 	bool	CheckMobCloseForCollision(Mob *attacker, Mob *exclude, float x, float y, float dist, uint8 beaconType);
 	uint32	CheckMobCollision(Mob *attacker, Mob *exclude, float x, float y, float z, uint8 beaconType);
 

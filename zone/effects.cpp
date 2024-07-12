@@ -1049,6 +1049,13 @@ void EntityList::AESpell(Mob *caster, Mob *center, uint16 spell_id, bool affect_
 		}
 	}
 
+
+	if (!caster->IsNPC() && !limit_all_aoes && IsDetrimentalSpell(spell_id) && spells[spell_id].targettype == ST_AECaster && RuleB(Quarm, LimitPBAOEDetrimentalSpells))
+	{
+		MAX_TARGETS_ALLOWED = RuleI(Quarm, AOEMaxHostilePBAOETargets);
+		limit_all_aoes = true;
+	}
+
 	int targets_hit = 0;
 	if (center->IsBeacon())
 		targets_hit = center->CastToBeacon()->GetTargetsHit();
@@ -1197,7 +1204,7 @@ void EntityList::AESpell(Mob *caster, Mob *center, uint16 spell_id, bool affect_
 				break;
 			}
 		}
-		else if (enable_bard_limit && IsBardAOEDamageSpell(spell_id))
+		else if (!caster->IsNPC() && enable_bard_limit && IsBardAOEDamageSpell(spell_id))
 		{
 			uint32 bard_aoe_cap = RuleI(Quarm, BardDamagingAOECap);
 			if (targets_hit < bard_aoe_cap || curmob->IsClient() && !curmob->CastToClient()->GetHideMe())
@@ -1224,7 +1231,9 @@ void EntityList::AESpell(Mob *caster, Mob *center, uint16 spell_id, bool affect_
 				caster->SpellOnTarget(spell_id, curmob, false, true, resist_adjust, false, ae_caster_id);
 				if (limit_all_aoes)
 				{
-					++targets_hit;
+
+					if(curmob->IsNPC())
+						++targets_hit;
 					if (targets_hit >= MAX_TARGETS_ALLOWED)
 						break;
 				}

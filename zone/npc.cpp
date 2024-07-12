@@ -136,6 +136,7 @@ NPC::NPC(const NPCType* d, Spawn2* in_respawn, const glm::vec4& position, int if
 		entity_list.RemoveEntity(mob->GetID());
 
 	loot_lockout_timer = 0;
+	instance_spawn_timer_override = 0;
 	memset(&NPCTypedata, 0, sizeof(NPCTypedata));
 	memcpy(&NPCTypedata, d, sizeof(NPCTypedata));
 	respawn2 = in_respawn;
@@ -205,6 +206,8 @@ NPC::NPC(const NPCType* d, Spawn2* in_respawn, const glm::vec4& position, int if
 	ATK = d->ATK;
 
 	loot_lockout_timer = d->loot_lockout;
+
+	instance_spawn_timer_override = d->instance_spawn_timer_override;
 
 	CalcMaxMana();
 	SetMana(GetMaxMana());

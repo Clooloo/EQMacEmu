@@ -20,6 +20,7 @@
 #include "../common/spdat.h"
 #include "../common/strings.h"
 #include "../common/types.h"
+#include "../common/data_verification.h"
 
 #include "entity.h"
 #include "client.h"
@@ -206,7 +207,16 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 	auto npc_type = new NPCType;
 	memcpy(npc_type, base, sizeof(NPCType));
 
+	if ((GetClass() == NECROMANCER || GetClass() == SHADOWKNIGHT) && GetBaseRace() == IKSAR && npc_type->race == SKELETON) {
+		npc_type->race = IKSAR_SKELETON;
+		npc_type->helmtexture = GetGender();
+    }
+
+	if (GetClass() == NECROMANCER && GetBaseRace() == GNOME && npc_type->race == SKELETON && npc_type->size != 0)
+		npc_type->size = EQ::ClampUpper((float)npc_type->size - 2.0f, 3.0f);
+
 	npc_type->loot_lockout = 0;
+	npc_type->instance_spawn_timer_override = 0;
 	// If pet power is set to -1 in the DB, use stat scaling
 	// Torven: Al'Kabor pre-dates pet power, and focii do different stats per class in our era, so needs to be hardcoded anyway
 	if (focusItemId && this->IsClient() && record.petpower == -1)
@@ -409,6 +419,7 @@ void Mob::MakePoweredPet(uint16 spell_id, const char* pettype, int16 petpower,
 	}
 
 	npc_type->loot_lockout = 0;
+	npc_type->instance_spawn_timer_override = 0;
 
 	//this takes ownership of the npc_type data
 	auto npc = new Pet(npc_type, this, (PetType)record.petcontrol, spell_id, record.petpower, focusItemId);
@@ -445,6 +456,7 @@ Pet::Pet(NPCType *type_data, Mob *owner, PetType type, uint16 spell_id, int16 po
 	SetPetSpellID(spell_id);
 	summonerid = owner->GetID();
 	loot_lockout_timer = 0;
+	instance_spawn_timer_override = 0;
 	taunting = true;
 	if (owner && owner->IsClient())
 		summonedClientPet = true;

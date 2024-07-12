@@ -37,6 +37,7 @@
 #define SPELL_RESURRECTION_EFFECTS 756
 #define SPELL_DRAGON_CHARM 841
 #define SPELL_NPC_HARM_TOUCH 929		// this is only used by a single NPC that I can see from logs (Nortlav)
+#define SPELL_MANA_CONVERT 940          // manastone click effect
 #define SPELL_CAZIC_TOUCH 982
 #define SPELL_DIMENSIONAL_RETURN 1133
 #define SPELL_CASSINDRAS_CHANT_OF_CLARITY 1287
@@ -57,6 +58,7 @@
 #define SPELL_AA_BOASTFUL_BELLOW 3282
 #define SPELL_EPOCH_CONVICTION 3767
 #define SPELL_GREENMIST_RECOURSE 3978
+#define SPELL_LIFE_DRAIN 931
 
 #define EFFECT_COUNT 12
 #define MAX_SPELL_TRIGGER 12	// One for each slot(only 6 for AA since AA use 2)

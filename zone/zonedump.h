@@ -131,6 +131,7 @@ struct NPCType
 	int8	stuck_behavior;
 	int8	flymode;
 	uint32	loot_lockout;
+	uint32	instance_spawn_timer_override;
 };
 
 struct PlayerCorpse_Struct {

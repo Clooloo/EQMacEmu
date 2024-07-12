@@ -139,6 +139,7 @@ void MapOpcodes()
 	ConnectedOpcodes[OP_Consume] = &Client::Handle_OP_Consume;
 	ConnectedOpcodes[OP_ControlBoat] = &Client::Handle_OP_ControlBoat;
 	ConnectedOpcodes[OP_CorpseDrag] = &Client::Handle_OP_CorpseDrag;
+	ConnectedOpcodes[OP_CorpseDrop] = &Client::Handle_OP_CorpseDrop;
 	ConnectedOpcodes[OP_Damage] = &Client::Handle_OP_Damage;
 	ConnectedOpcodes[OP_Death] = &Client::Handle_OP_Death;
 	ConnectedOpcodes[OP_DeleteCharge] = &Client::Handle_OP_DeleteCharge;
@@ -396,8 +397,6 @@ void Client::CompleteConnect()
 	hpupdate_timer.Start();
 	position_timer.Start();
 	autosave_timer.Start();
-	entity_list.UpdateNewClientDistances(this);
-	client_distance_timer.Start(2000, false);
 	SetDuelTarget(0);
 	SetDueling(false);
 
@@ -687,25 +686,74 @@ void Client::CompleteConnect()
 	SendToBoat(true);
 	worldserver.RequestTellQueue(GetName());
 
+	if (GetBaseRace() == IKSAR && IsMule() && RuleB(Quarm, RestrictIksarsToKunark) && zone)
+	{
+		Save();
+		WorldKick();
+		Disconnect();
+		return;
+	}
+
+
 	//enforce some rules..
 	if (!CanBeInZone()) {
 		Log(Logs::Detail, Logs::Status, "[CLIENT] Kicking char from zone, not allowed here");
-		if (m_pp.expansions & LuclinEQ)
+		if (RuleB(Quarm, RestrictIksarsToKunark) && zone)
 		{
-			GoToSafeCoords(database.GetZoneID("arena"), GUILD_NONE);
+			// Mules by their very nature require access to at least Luclin. Set that here.
+			if (IsMule() && GetBaseRace() != IKSAR)
+			{
+				if (RuleB(Quarm, EastCommonMules)) {
+					DoZoneMove(database.GetZoneID("ecommons"), GUILD_NONE, -164.0f, -1651.0f, 4.0f, 0.0f);
+				}
+				else {
+					DoZoneMove(database.GetZoneID("bazaar"), GUILD_NONE, 140.0f, -821.0f, 5.0f, 0.0f);
+				}
+			}
+			else if (IsMule() && GetBaseRace() == IKSAR)
+			{
+				//Do nothing, just dc.
+			}
+			else if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() != KunarkEQ)
+			{
+				DoZoneMove(database.GetZoneID("fieldofbone"), GUILD_NONE, 1617.0f, -1684.0f, -50.0f, 0.0f);
+			}
+			else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+			{
+				DoZoneMove(database.GetZoneID("ecommons"), GUILD_NONE, -164.0f, -1651.0f, 4.0f, 0.0f);
+			}
 		}
 		else
 		{
-			// Mules by their very nature require access to at least Luclin. Set that here.
-			if (IsMule())
-			{
-				m_pp.expansions = m_pp.expansions + LuclinEQ;
-				database.SetExpansion(AccountName(), m_pp.expansions);
-				GoToSafeCoords(database.GetZoneID("bazaar"), GUILD_NONE);
-			}
 
-			GoToSafeCoords(database.GetZoneID("arena"), GUILD_NONE);
+			if (m_pp.expansions & LuclinEQ)
+			{
+				if (RuleB(Quarm, EastCommonMules)) {
+					DoZoneMove(database.GetZoneID("ecommons"), GUILD_NONE, -164.0f, -1651.0f, 4.0f, 0.0f);
+
+				}
+				else {
+					DoZoneMove(database.GetZoneID("bazaar"), GUILD_NONE, 140.0f, -821.0f, 5.0f, 0.0f);
+				}
+			}
+			else
+			{
+				// Mules by their very nature require access to at least Luclin. Set that here.
+				if (IsMule())
+				{
+					if (RuleB(Quarm, EastCommonMules)) {
+						DoZoneMove(database.GetZoneID("ecommons"), GUILD_NONE, -164.0f, -1651.0f, 4.0f, 0.0f);
+					}
+					else {
+						DoZoneMove(database.GetZoneID("bazaar"), GUILD_NONE, 140.0f, -821.0f, 5.0f, 0.0f);
+					}
+				}
+				else {
+					DoZoneMove(database.GetZoneID("ecommons"), GUILD_NONE, -164.0f, -1651.0f, 4.0f, 0.0f);
+				}
+			}
 		}
+		Disconnect();
 		return;
 	}
 
@@ -1025,8 +1073,8 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 				Log(Logs::General, Logs::Error, "Ghosting client: Account ID:%i Name:%s Character:%s IP:%s PORT:%d Incoming IP:%s PORT:%d",
 					client->AccountID(), client->AccountName(), client->GetName(), inet_ntoa(ghost_addr), ntohs(eqs->GetRemotePort()), inet_ntoa(local_addr), client->GetPort());
 				client->Save();
-				Kick();
-				eqs->Close();
+				client->Kick();
+				client->Disconnect();
 				return;
 			}
 		}
@@ -1054,7 +1102,7 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 		if (client != 0 && client_state != CLIENT_AUTH_RECEIVED) {
 			Log(Logs::General, Logs::Error, "GetAuth() returned false kicking client");
 			client->Save();
-			client->Kick();
+			client->Disconnect();
 			return;
 		}
 		else {
@@ -1107,9 +1155,7 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 			Log(Logs::General, Logs::Error, "Ghosting client: Account ID:%i Name:%s Character:%s IP:%s PORT:%d Incoming IP:%s PORT:%d",
 				client->AccountID(), client->AccountName(), client->GetName(), inet_ntoa(ghost_addr), ntohs(eqs->GetRemotePort()), inet_ntoa(local_addr), client->GetPort());
 			client->Save();
-			Kick();
-			eqs->Close();
-			return;
+			client->HardDisconnect();
 		}
 	}
 
@@ -1312,7 +1358,7 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 	level = m_pp.level;
 	last_position_update_time = std::chrono::high_resolution_clock::now();
 	m_RewindLocation = glm::vec3();
-	m_LastLocation = glm::vec3();
+	m_LastLocation = glm::vec4();
 	m_Position.x = m_pp.x;
 	m_Position.y = m_pp.y;
 	m_Position.z = m_pp.z;
@@ -1517,7 +1563,7 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 
 	CalcBonuses();
 
-	if (m_pp.cur_hp <= 0)
+	if (m_pp.cur_hp <= -200)
 	{
 		m_pp.cur_hp = GetMaxHP();
 	}
@@ -1873,8 +1919,6 @@ void Client::Handle_Connect_OP_ZoneEntry(const EQApplicationPacket *app)
 	outapp->priority = 6;
 	FastQueuePacket(&outapp);
 
-	// this sets locations mobs were, when bulk zone spawns sent
-	entity_list.BulkNewClientDistances(this);
 	/* Zone Spawns Packet */
 	entity_list.SendZoneSpawnsBulk(this);
 	entity_list.SendZoneCorpsesBulk(this);
@@ -2138,6 +2182,17 @@ void Client::Handle_OP_AutoAttack(const EQApplicationPacket *app)
 	}
 
 
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	if (Admin() > 0)
 	{
 		Message(CC_Red, "You cannot autoattack as a GM.");
@@ -2257,6 +2312,14 @@ void Client::Handle_OP_Begging(const EQApplicationPacket *app)
 	NPC* npc = nullptr;
 	if (GetTarget() && GetTarget()->IsNPC())
 		npc = GetTarget()->CastToNPC();
+
+	if (npc && npc->GetSpecialAbility(NO_HARM_FROM_CLIENT))
+	{
+		return;
+	}
+
+	if (npc && DistanceSquaredNoZ(m_Position, npc->GetPosition()) >= 2200)
+		return;
 
 	uint16 beg_skill = GetSkill(EQ::skills::SkillBegging);
 	if (npc && !npc->IsPet() && zone->random.Int(1, 199) > beg_skill && zone->random.Roll(9))
@@ -2603,6 +2666,18 @@ void Client::Handle_OP_CastSpell(const EQApplicationPacket *app)
 		std::cout << "Wrong size: OP_CastSpell, size=" << app->size << ", expected " << sizeof(CastSpell_Struct) << std::endl;
 		return;
 	}
+
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	if (IsAIControlled() && !has_zomm) {
 		this->Message_StringID(CC_Red, NOT_IN_CONTROL);
 		return;
@@ -2691,6 +2766,13 @@ void Client::Handle_OP_CastSpell(const EQApplicationPacket *app)
 			// Check for Mod Rod recast time.
 			if (castspell->spell_id == SPELL_MODULATION && !p_timers.Expired(&database, pTimerModulation))
 			{
+				InterruptSpell(SPELL_RECAST, CC_User_SpellFailure, castspell->spell_id);
+				return;
+			}
+
+			if (castspell->spell_id == SPELL_MANA_CONVERT && !zone->AllowManastoneClick())
+			{
+				Message_StringID(CC_Red, SPELL_DOES_NOT_WORK_HERE);
 				InterruptSpell(SPELL_RECAST, CC_User_SpellFailure, castspell->spell_id);
 				return;
 			}
@@ -2889,9 +2971,20 @@ void Client::Handle_OP_ClickObject(const EQApplicationPacket *app)
 	auto* entity = entity_list.GetID(click_object->drop_id);
 	if (entity && entity->IsObject()) {
 		Object* object = entity->CastToObject();
+		
+		std::string msg;
+		if (RuleB(Quarm, RestrictIksarsToKunark))
+		{
+			if(GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+				msg = "You're not allowed to pick up dropped items if you're an Iksar in classic zones right now.";
+			else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+			{
+				msg = "You're not allowed to pick up any items if you're a non-Iksar in Kunark zones right now.";
+			}
+		}
+		
 		if (object->IsPlayerDrop())
 		{
-			std::string msg;
 			if (Admin() > 0)
 			{
 				msg = "You cannot pick up dropped player items because you're a GM and that would make the players around you a sad panda.";
@@ -3057,6 +3150,10 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app)
 		SendPosUpdate();
 		return;
 	}
+
+	auto current_update_time = std::chrono::high_resolution_clock::now();
+	auto timeDiff = std::chrono::duration<double>(current_update_time - last_position_update_time);
+	
 	// client does crappy floor function below 0
 	if (ppu->x_pos < 0)
 		ppu->x_pos--;
@@ -3071,6 +3168,9 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app)
 		MovePCGuildID(freporte, GUILD_NONE, -1570.0f, -25.0f, 20.0f, 231.0f);
 		return;
 	}
+
+	if (IsDraggingCorpse())
+		DragCorpses();
 
 	//Check to see if PPU should trigger an update to the rewind position.
 	float rewind_x_diff = 0;
@@ -3093,14 +3193,15 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app)
 	if ((rewind_x_diff > 5000) || (rewind_y_diff > 5000))
 		m_RewindLocation = glm::vec3(ppu->x_pos, ppu->y_pos, (float)ppu->z_pos / 10.0f);
 
-	glm::vec3 newPosition(ppu->x_pos, ppu->y_pos, ppu->z_pos / 10.0f);
+	glm::vec4 newPosition(ppu->x_pos, ppu->y_pos, ppu->z_pos / 10.0f, ppu->heading);
 	bool bSkip = false;
-	if (m_LastLocation == glm::vec3())
+	if (m_LastLocation == glm::vec4())
 	{
 		m_LastLocation = newPosition;
 		m_Position.x = newPosition.x;
 		m_Position.y = newPosition.y;
 		m_Position.z = newPosition.z;
+		m_Position.w = newPosition.w;
 
 		bSkip = true;
 	}		
@@ -3171,7 +3272,7 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app)
 			{
 
 				std::string warped = std::string(GetCleanName()) + " - entity moving too fast: dist: " + std::to_string(dist) + ", distDivTime: " + std::to_string(distDivTime) + "playerSpeed: " + std::to_string(speed);
-				worldserver.SendEmoteMessage(0, 0, 250, CC_Default, "%s - entity moving too fast: %lf %lf - is_exempt_correct %s, playerSpeed %lf", GetCleanName(), dist, distDivTime, std::to_string(is_exempt_correct).c_str(), speed);
+				worldserver.SendEmoteMessage(0, 0, 100, CC_Default, "%s - entity moving too fast: %lf %lf - is_exempt_correct %s, playerSpeed %lf", GetCleanName(), dist, distDivTime, std::to_string(is_exempt_correct).c_str(), speed);
 				database.SetHackerFlag(this->account_name, this->name, warped.c_str());
 			}
 		}
@@ -3248,7 +3349,6 @@ void Client::Handle_OP_ClientUpdate(const EQApplicationPacket *app)
 	m_RewindLocation = m_Position;
 	if (RuleB(Quarm, EnableProjectSpeedie))
 	{
-		auto current_update_time = std::chrono::high_resolution_clock::now();
 		auto timeDiff = std::chrono::duration<double>(current_update_time - last_position_update_time);
 		if (timeDiff.count() >= 1.0)
 		{
@@ -3680,6 +3780,11 @@ void Client::Handle_OP_CorpseDrag(const EQApplicationPacket *app)
 
 	CorpseDrag_Struct *cds = (CorpseDrag_Struct*)app->pBuffer;
 
+
+	cds->CorpseName[63] = '\0';
+
+	cds->DraggerName[63] = '\0';
+
 	Mob* corpse = entity_list.GetMob(cds->CorpseName);
 
 	if (!corpse || !corpse->IsPlayerCorpse() || corpse->CastToCorpse()->IsBeingLooted())
@@ -3705,8 +3810,64 @@ void Client::Handle_OP_CorpseDrag(const EQApplicationPacket *app)
 	Message_StringID(MT_DefaultText, CORPSEDRAG_BEGIN, cds->CorpseName);
 }
 
+void Client::Handle_OP_CorpseDrop(const EQApplicationPacket *app)
+{
+	if (app->size == 1 || app->size == 0)
+	{
+		Message_StringID(CC_Default, CORPSEDRAG_STOPALL);
+		ClearDraggedCorpses();
+		return;
+	}
+
+	VERIFY_PACKET_LENGTH(OP_CorpseDrop, app, CorpseDrag_Struct);
+
+	CorpseDrag_Struct *cds = (CorpseDrag_Struct*)app->pBuffer;
+
+	cds->CorpseName[63] = '\0';
+
+	cds->DraggerName[63] = '\0';
+
+	Mob* corpse = entity_list.GetMob(cds->CorpseName);
+
+	if (!corpse || !corpse->IsPlayerCorpse() || corpse->CastToCorpse()->IsBeingLooted())
+		return;
+
+	Client *c = entity_list.FindCorpseDragger(corpse->GetID());
+
+	if (c)
+	{
+		if (c == this)
+		{
+			for (auto It = DraggedCorpses.begin(); It != DraggedCorpses.end(); ++It) {
+				if (!strcasecmp(It->first.c_str(), cds->CorpseName))
+				{
+					It = DraggedCorpses.erase(It);
+					Message_StringID(MT_DefaultText, CORPSEDRAG_STOP, corpse->GetCleanName());
+					return;
+				}
+			}
+
+		}
+		else
+			Message_StringID(MT_DefaultText, CORPSEDRAG_SOMEONE_ELSE, corpse->GetCleanName());
+		return;
+	}
+}
+
 void Client::Handle_OP_CreateObject(const EQApplicationPacket *app)
 {
+
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	if (Admin() > 0)
 	{
 		EQ::ItemInstance *inst = m_inv.GetItem(EQ::invslot::slotCursor);
@@ -6174,6 +6335,17 @@ void Client::Handle_OP_LootItem(const EQApplicationPacket *app)
 		return;
 	}
 
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	auto* l = (LootingItem_Struct*)app->pBuffer;
 	auto entity = entity_list.GetID(*((uint16*)app->pBuffer));
 	if (!entity) {
@@ -7788,6 +7960,17 @@ void Client::Handle_OP_ShopPlayerBuy(const EQApplicationPacket *app)
 			sizeof(Merchant_Sell_Struct), app->size);
 		return;
 	}
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	RDTSC_Timer t1;
 	t1.start();
 	Merchant_Sell_Struct* mp = (Merchant_Sell_Struct*)app->pBuffer;
@@ -8141,6 +8324,17 @@ void Client::Handle_OP_ShopPlayerSell(const EQApplicationPacket *app)
 		Log(Logs::General, Logs::Error, "Invalid size on OP_ShopPlayerSell: Expected %i, Got %i",
 			sizeof(Merchant_Purchase_Struct), app->size);
 		return;
+	}
+
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
 	}
 
 
@@ -9228,6 +9422,17 @@ void Client::Handle_OP_Trader(const EQApplicationPacket *app)
 void Client::Handle_OP_TraderBuy(const EQApplicationPacket *app) 
 {
 
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	if (IsSoloOnly() || IsSelfFound())
 	{
 		TradeRequestFailed(app);
@@ -9275,6 +9480,16 @@ void Client::Handle_OP_TradeRequest(const EQApplicationPacket *app)
 	// Trade session not started until OP_TradeRequestAck is sent
 	if (!trade_timer.Check())
 		return;
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
 
 	CommonBreakInvisible(true);
 
@@ -9404,6 +9619,17 @@ void Client::Handle_OP_TradeRequestAck(const EQApplicationPacket *app)
 		Log(Logs::General, Logs::Error, "Wrong size: OP_TradeRequestAck, size=%i, expected %i", app->size, sizeof(TradeRequest_Struct));
 		return;
 	}
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (GetBaseRace() == IKSAR && zone->GetZoneExpansion() == ClassicEQ)
+			return;
+		else if (GetBaseRace() != IKSAR && zone->GetZoneExpansion() == KunarkEQ)
+		{
+			return;
+		}
+	}
+
 	// Trade request recipient is acknowledging they are able to trade
 	// After this, the trade session has officially started
 	// Send ack on to trade initiator if client

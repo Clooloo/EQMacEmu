@@ -88,6 +88,7 @@ private:
 	uint32	currentnpcid;
 	NPC*	npcthis;
 	uint32	last_level_attempt;
+	uint32  last_instance_spawn_timer_override;
 	float	x;
 	float	y;
 	float	z;

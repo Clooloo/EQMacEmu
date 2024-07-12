@@ -99,6 +99,7 @@ RULE_INT ( World, ZoneAutobootTimeoutMS, 60000 )
 RULE_INT ( World, ClientKeepaliveTimeoutMS, 65000 )
 RULE_BOOL ( World, UseBannedIPsTable, false ) // Toggle whether or not to check incoming client connections against the Banned_IPs table. Set this value to false to disable this feature.
 RULE_INT ( World, MaxClientsPerIP, -1 ) // Maximum number of clients allowed to connect per IP address if account status is < AddMaxClientsStatus. Default value: -1 (feature disabled)
+RULE_INT(World, MaxMulesPerIP, -1) // Maximum number of clients allowed to connect per IP address if account status is < AddMaxClientsStatus. Default value: -1 (feature disabled)
 RULE_INT( World, MaxClientsPerForumName, -1 ) // Maximum number of clients allowed to connect per forum name if account status is < AddMaxClientsStatus. Default value: -1 (feature disabled)
 RULE_INT ( World, ExemptMaxClientsStatus, -1 ) // Exempt accounts from the MaxClientsPerIP and AddMaxClientsStatus rules, if their status is >= this value. Default value: -1 (feature disabled)
 RULE_INT ( World, AddMaxClientsPerIP, -1 ) // Maximum number of clients allowed to connect per IP address if account status is < ExemptMaxClientsStatus. Default value: -1 (feature disabled)
@@ -120,6 +121,8 @@ RULE_INT(World, WhoListLimit, 20) //The max players returned in /who all.
 RULE_INT(World, MuleToonLimit, 8) // The number of characters a mule account can create/access.
 RULE_BOOL(World, DontBootDynamics, false) // If true, dynamic zones will not boot when a player tries to enter them.
 RULE_REAL(World, CurrentExpansion, 6.0)
+RULE_INT(World, WorldClientLinkdeadMS, 45000) //the time before a client times out as stale from world. 45s default.
+RULE_INT(World, ClientTimeoutStaleAmount, 3)
 RULE_CATEGORY_END()
 
 RULE_CATEGORY(Zone)
@@ -247,19 +250,30 @@ RULE_REAL(Quarm, AccidentalFallUnitDist, 50.0) // Length of initial zonein fall 
 RULE_BOOL(Quarm, ThanksgivingExpBonus, false)
 RULE_REAL(Quarm, ThanksgivingExpBonusOutdoorAmt, 0.20)
 RULE_REAL(Quarm, FlyingRaceExpBonus, 0.50)
+RULE_REAL(Quarm, InstanceZEMOverride, 20)
 RULE_INT(Quarm, AntiSpamMuteInSeconds, 900) // Defaults to 15 minutes. Live will likely adjust this
 RULE_BOOL(Quarm, EnableNPCProximityAggroSystem, false) // Classic behavior is true. Live Quarm has this false by default. CSR complaints about training warranted this behavior.
 RULE_INT(Quarm, AutomatedRaidRotationRaidGuildLevelRequirement, 30) // Required level to participate in raid content.
 RULE_INT(Quarm, AutomatedRaidRotationRaidGuildMemberCountRequirement, 12) // Required amount of members to participate in a raid encounter. Not all of these must be in the same guild (see below rule.)
 RULE_INT(Quarm, AutomatedRaidRotationRaidNonMemberCountRequirement, 18) // Required amount of same-guild members to participate in a raid encounter. These must be in the same guild, and one officer from the current guild must be in the raid.
 RULE_INT(Quarm, MinStatusToZoneIntoAnyGuildZone, 100) // Required amount of same-guild members to participate in a raid encounter. These must be in the same guild, and one officer from the current guild must be in the raid.
-RULE_BOOL(Quarm, EnableGuildZoneRequirementOnEntry, false) // Classic behavior is true. Live Quarm has this false by default. CSR complaints about training warranted this behavior.
+RULE_BOOL(Quarm, EnableGuildZoneRequirementOnEntry, false) 
 RULE_INT(Quarm, AOEThrottlingMaxAOETargets, 50) // This will curb nonsense with performance issues relating to amount of targets if the amount of clients exceeds 300 in a single zone.
+RULE_INT(Quarm, AOEMaxHostilePBAOETargets, 30)
+RULE_BOOL(Quarm, LimitPBAOEDetrimentalSpells, true)
 RULE_INT(Quarm, AOEThrottlingMaxClients, 300) // This will curb nonsense with performance issues relating to amount of targets if the amount of clients exceeds 300 in a single zone.
 RULE_INT(Quarm, EnableLuclinEraShieldACOvercap, false)
 RULE_INT(Quarm, ClientInstanceBootGraceMS, 60000)
 RULE_INT(Quarm, DeletedCharacterMarkLevel, 10)
+RULE_BOOL(Quarm, EastCommonMules, true)
+RULE_BOOL(Quarm, IncludeMulesInServerCount, false)
 RULE_BOOL(Quarm, ErollsiDayEvent, false)
+RULE_BOOL(Quarm, RestrictIksarsToKunark, false)
+RULE_BOOL(Quarm, AllowBypassMaxClientsOnWorldEnter, false)
+RULE_BOOL(Quarm, InstanceAlwaysHasMinimumSpawnTime, true)
+RULE_INT(Quarm, InstanceMinimumSpawnTime, 64800000)
+RULE_BOOL(Quarm, EnableQuestBasedXPLimit, true) // Whether or not to enable the Quest XP killswitch. Use on major content launches to avoid abuse.
+RULE_INT(Quarm, QuestBasedXPLimitLevel, 51) // For Kunark. Adjust for POP Launch.
 RULE_CATEGORY_END()
 
 RULE_CATEGORY( Map )
@@ -332,7 +346,7 @@ RULE_INT ( Spells, AI_IdleNoSpellMaxRecast, 6000) // AI spell recast time(MS) ch
 RULE_INT ( Spells, AI_IdleBeneficialChance, 100) // Chance while idle to do a beneficial spell on self or others.
 RULE_BOOL ( Spells, SHDProcIDOffByOne, true) // pre June 2009 SHD spell procs were off by 1, they stopped doing this in June 2009 (so UF+ spell files need this false)
 RULE_BOOL ( Spells, SwarmPetTargetLock, false) // Use old method of swarm pets target locking till target dies then despawning.
-RULE_INT ( Spells, SpellRecoveryTimer, 2500) // Begins when a cast is complete, and is checked after the next spell finishes casting. If not expired, the new spell is interrupted. Clickies are exempt.
+RULE_INT ( Spells, SpellRecoveryTimer, 3500) // Begins when a cast is complete, and is checked after the next spell finishes casting. If not expired, the new spell is interrupted. Clickies are exempt. 3500 is Sony's value
 RULE_BOOL ( Spells, JamFestAAOnlyAffectsBard, true) // Bard Jam Fest AA only worked on bards themselves but was changed after AK's era.  Changing this to false will put the client stats out of sync with the server.
 RULE_BOOL ( Spells, ReducePacifyDuration, false) // AK and the eqmac client have 60 tick Pacify (spell 45) duration.  This rule reduces the duration to 7 ticks without desyncing the cast bar and focus effects for custom servers that want this.
 RULE_CATEGORY_END()

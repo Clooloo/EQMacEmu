@@ -659,15 +659,17 @@ bool Mob::DoPreCastingChecks(uint16 spell_id, CastingSlot slot, uint16 spell_tar
 				} 
 				if (spell_target->CastToClient()->IsSelfFound() && spell_target != this)
 				{
-					bool can_get_experience = caster->IsInLevelRange(spell_target->CastToClient()->GetLevel2());
+					bool can_get_experience = spell_target->CastToClient()->IsInLevelRange(caster->GetLevel2());
 					bool compatible = caster->IsSelfFound() == spell_target->CastToClient()->IsSelfFound();
 					if (!compatible)
 					{
+						// if the spell target is self found, but the caster is not, don't allow the caster to buff
 						is_failed_cast = true;
 						fail_message = SELF_FOUND_ERROR;
 					}
 					else if(compatible && !can_get_experience)
 					{
+						// if the spell_target can not get EXP while grouped with the caster, don't allow the caster to buff
 						is_failed_cast = true;
 						fail_message = LEVEL_ERROR;
 					}
@@ -1077,7 +1079,7 @@ void Mob::InterruptSpell(uint16 message, uint16 color, uint16 spellid, bool fizz
 			switch (message)
 			{
 			case SONG_ENDS:
-				message_other = SONG_ENDS_OTHER;
+				message_other = 0;
 				color = CC_User_Spells;
 				break;
 			case SONG_ENDS_ABRUPTLY:
@@ -1109,7 +1111,9 @@ void Mob::InterruptSpell(uint16 message, uint16 color, uint16 spellid, bool fizz
 			}
 
 			if (message_other > 0)
+			{
 				entity_list.MessageClose_StringID(this, true, 200, color, message_other, this->GetCleanName());
+			}
 		}
 	}
 }
@@ -2303,6 +2307,15 @@ bool Mob::SpellFinished(uint16 spell_id, Mob *spell_target, CastingSlot slot, ui
 			{
 				recast -= GetAA(aaTouchoftheWicked) * 720;
 				CastToClient()->ExpendAATimer(aaImprovedHarmTouch);
+			}
+			else
+			{
+				recast += GetActSpellCasttime(spell_id, spells[spell_id].cast_time) / 1000 - 1;
+				if (
+					GetLevel() > 50 && spells[spell_id].goodEffect == 0 && spells[spell_id].cast_time > 2999 &&
+					(GetClass() == BEASTLORD || GetClass() == PALADIN || GetClass() == RANGER || GetClass() == SHADOWKNIGHT)
+				)
+					recast -= 1;
 			}
 
 			uint16 timer_id = spell_id;
@@ -3765,6 +3778,8 @@ float Mob::CheckResistSpell(uint8 resist_type, uint16 spell_id, Mob *caster, Mob
 
 	// SummonedPet is actually the owner Mob
 	Mob* SummonedPet = GetOwner() && !IsCharmedPet() && GetPetType() != petHatelist && caster->IsNPC() ? GetOwner() : nullptr;
+	if (RuleR(World, CurrentExpansion) < (float)ExpansionEras::LuclinEQEra + 0.64)
+		SummonedPet = nullptr;
 
 	int fire = GetFR();
 	int cold = GetCR();
@@ -3956,10 +3971,52 @@ float Mob::CheckResistSpell(uint8 resist_type, uint16 spell_id, Mob *caster, Mob
 		}
 	}
 
+	bool use_classic_resists = RuleR(World, CurrentExpansion) < (float)ExpansionEras::LuclinEQEra + 0.79;
+
 	//Add our level, resist and -spell resist modifier to our roll chance
-	resist_chance += level_mod;
-	resist_chance += resist_modifier;
 	resist_chance += target_resist;
+	resist_chance += level_mod;
+	if (use_classic_resists && IsClient())
+	{
+		if (resist_chance > 200 && spells[spell_id].targettype == ST_Tap)
+			resist_chance = 200;
+
+		if (caster->IsNPC())
+		{
+			if (spell_id == 837)	// Stun Breath
+				resist_modifier = -50;
+			if (spell_id == 843)	// Immolating Breath
+				resist_modifier = -100;
+
+			if (resist_modifier == -150)
+			{
+				// dragon aoes
+				resist_modifier = -100;
+			}
+		}
+
+		int hardcap = 350;
+		if (RuleR(World, CurrentExpansion) < (float)ExpansionEras::VeliousEQEra)
+			hardcap = 250;
+
+		if (resist_chance > hardcap)
+			resist_chance = hardcap;
+
+		if (resist_chance > 200)
+			resist_chance = 200 + (resist_chance - 200) / 2;
+	}
+
+	resist_chance += resist_modifier;
+
+	if (use_classic_resists && caster->IsNPC() && caster->GetLevel() > 24 && zone->GetZoneID() != sirens
+		&& (caster->GetClass() == ENCHANTER || caster->GetClass() == ENCHANTERGM) )
+	{
+		if (GetLevel() < resist_chance)
+			resist_chance = GetLevel();
+
+		if (resist_chance > 80)
+			resist_chance = 80;
+	}
 
 	if (tick_save)
 	{
@@ -4023,16 +4080,19 @@ float Mob::CheckResistSpell(uint8 resist_type, uint16 spell_id, Mob *caster, Mob
 		}
 		else
 		{
+			if (use_classic_resists && resist_chance > 200 && IsClient())
+				resist_chance = 200;
+
 			int partial_modifier = ((150 * (resist_chance - roll)) / resist_chance);
 
 			if(IsNPC())
 			{
-				if(target_level > caster_level && target_level >= 17 && caster_level <= 50)
+				if(target_level > caster_level && target_level >= 17 && (caster_level <= 50 || use_classic_resists))
 				{
 					partial_modifier += 5;
 				}
 
-				if(target_level >= 30 && caster_level <= 50)
+				if(target_level >= 30 && (caster_level <= 50 || use_classic_resists))
 				{
 					partial_modifier += (caster_level - 25);
 				}

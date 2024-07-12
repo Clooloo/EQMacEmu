@@ -139,7 +139,6 @@ Client::Client(EQStreamInterface* ieqs)
 	charm_cast_timer(3500),
 	qglobal_purge_timer(30000),
 	TrackingTimer(2000),
-	client_distance_timer(1000),
 	ItemTickTimer(10000),
 	ItemQuestTimer(500),
 	anon_toggle_timer(250),
@@ -278,8 +277,6 @@ Client::Client(EQStreamInterface* ieqs)
 	HideCorpseMode = HideCorpseNone;
 	PendingGuildInvitation = false;
 
-	client_distance_timer.Disable();
-
 	InitializeBuffSlots();
 
 	LoadAccountFlags();
@@ -360,6 +357,7 @@ Client::Client(EQStreamInterface* ieqs)
 	wake_corpse_id = 0;
 	ranged_attack_leeway_timer.Disable();
 	last_fatigue = 0;
+	mule_initiated = false;
 }
 
 Client::~Client() {
@@ -412,7 +410,6 @@ Client::~Client() {
 	safe_delete(KarmaUpdateTimer);
 	safe_delete(GlobalChatLimiterTimer);
 	safe_delete(qGlobals);
-	dynamic_positions.clear();
 
 	DepopPet();
 	numclients--;
@@ -547,10 +544,17 @@ bool Client::Save(uint8 iCommitNow) {
 	m_pp.guildrank = guildrank;
 
 	/* Mana and HP */
-	if (GetHP() <= 0) {
+
+	if (GetHP() <= -100)
+	{
 		m_pp.cur_hp = GetMaxHP();
 	}
-	else {
+	else if (GetHP() <= 0)
+	{
+		m_pp.cur_hp = 1;
+	}
+	else 
+	{
 		m_pp.cur_hp = GetHP();
 	}
 
@@ -988,7 +992,7 @@ void Client::ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_s
 
 			if(TotalKarma < RuleI(Chat, KarmaGlobalChatLimit))
 			{
-				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit))
+				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit) && !this->IsMule())
 				{
 					Message(CC_Default, "You do not have permission to talk in Auction at this time.");
 					return;
@@ -1035,7 +1039,7 @@ void Client::ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_s
 
 			if(TotalKarma < RuleI(Chat, KarmaGlobalChatLimit))
 			{
-				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit))
+				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit) && !this->IsMule())
 				{
 					Message(CC_Default, "You do not have permission to talk in OOC at this time.");
 					return;
@@ -1068,7 +1072,7 @@ void Client::ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_s
 	}
 	case ChatChannel_Tell: { /* Tell */
 
-			if (GetLevel() < RuleI(Chat, GlobalChatLevelLimit))
+			if (GetLevel() < RuleI(Chat, GlobalChatLevelLimit) && !this->IsMule())
 			{
 				Message(CC_Default, "You do not have permission to send tells until level %i.", RuleI(Chat, GlobalChatLevelLimit));
 				return;
@@ -1076,7 +1080,7 @@ void Client::ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_s
 
 			if(TotalKarma < RuleI(Chat, KarmaGlobalChatLimit))
 			{
-				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit))
+				if(GetLevel() < RuleI(Chat, KarmaGlobalChatLevelLimit) && !this->IsMule())
 				{
 					Message(CC_Default, "You do not have permission to send tells.");
 					return;
@@ -1187,6 +1191,10 @@ void Client::ChannelMessageReceived(uint8 chan_num, uint8 language, uint8 lang_s
 void Client::ChannelMessageSend(const char* from, const char* to, uint8 chan_num, uint8 language, uint8 lang_skill, const char* message, ...) {
 	if ((chan_num==ChatChannel_GMSAY && !(this->GetGM())) || (chan_num==ChatChannel_Petition && this->Admin() < AccountStatus::QuestTroupe)) // dont need to send /pr & /petition to everybody
 		return;
+
+	if (!Connected())
+		return;
+
 	char message_sender[64];
 
 	EQApplicationPacket app(OP_ChannelMessage, sizeof(ChannelMessage_Struct)+strlen(message)+1);
@@ -1224,6 +1232,8 @@ void Client::Message(uint32 type, const char* message, ...) {
 	if (GetFilter(FilterMeleeCrits) == FilterHide && type == MT_CritMelee) //98 is self...
 		return;
 	if (GetFilter(FilterSpellCrits) == FilterHide && type == MT_SpellCrits)
+		return;
+	if (!Connected())
 		return;
 
 		va_list argptr;
@@ -2784,6 +2794,9 @@ void Client::Message_StringID(uint32 type, uint32 string_id, uint32 distance)
 		return;
 	if (GetFilter(FilterSpellCrits) == FilterHide && type == MT_SpellCrits)
 		return;
+	if (!Connected())
+		return;
+
 	auto outapp = new EQApplicationPacket(OP_FormattedMessage, 12);
 	FormattedMessage_Struct *fm = (FormattedMessage_Struct *)outapp->pBuffer;
 	fm->string_id = string_id;
@@ -2811,6 +2824,9 @@ void Client::Message_StringID(uint32 type, uint32 string_id, const char* message
 	if (GetFilter(FilterMeleeCrits) == FilterHide && type == MT_CritMelee) //98 is self...
 		return;
 	if (GetFilter(FilterSpellCrits) == FilterHide && type == MT_SpellCrits)
+		return;
+
+	if (!Connected())
 		return;
 
 	int i, argcount, length;
@@ -2932,6 +2948,9 @@ void Client::FilteredMessage_StringID(Mob *sender, uint32 type, eqFilterType fil
 	if (!FilteredMessageCheck(sender, filter))
 		return;
 
+	if (!Connected())
+		return;
+
 	int i, argcount, length;
 	char *bufptr;
 	const char *message_arg[9] = {0};
@@ -2981,6 +3000,9 @@ void Client::FilteredMessage_StringID(Mob *sender, uint32 type, eqFilterType fil
 
 void Client::Tell_StringID(uint32 string_id, const char *who, const char *message)
 {
+
+	if (!Connected())
+		return;
 	char string_id_str[10];
 	snprintf(string_id_str, 10, "%d", string_id);
 
@@ -3052,7 +3074,6 @@ void Client::LinkDead()
 //	save_timer.Start(2500);
 	linkdead_timer.Start(RuleI(Zone,ClientLinkdeadMS));
 	SendAppearancePacket(AT_Linkdead, 1);
-	client_distance_timer.Disable();
 	client_state = CLIENT_LINKDEAD;
 	if (IsSitting())
 	{
@@ -3259,7 +3280,7 @@ void Client::Sacrifice(Client *caster)
 				SetID(0);
 			}
 
-			SetHP(-500);
+			SetHP(-100);
 			SetMana(GetMaxMana());
 
 			Save();
@@ -6823,6 +6844,12 @@ void Client::SetMarried(const char* playerName)
 	if (strlen(playerName) > 20)
 		return;
 
+	if (!RuleB(Quarm, ErollsiDayEvent))
+	{
+		Message(13, "Marriage season is not active.. Marriage failed.");
+		return;
+	}
+
 	Client* c = entity_list.GetClientByName(playerName);
 	if (c)
 	{
@@ -6888,4 +6915,27 @@ bool Client::IsMarried()
 bool Client::HasTemporaryLastName()
 {
 	return m_epp.temp_last_name[0] != 0;
+}
+
+uint16 Client::GetWeaponEffectID(int slot)
+{
+	if (slot != EQ::invslot::slotPrimary && slot != EQ::invslot::slotSecondary && slot != EQ::invslot::slotRange && slot != EQ::invslot::slotAmmo)
+		return 0;
+
+	EQ::ItemInstance* weaponInst = GetInv().GetItem(slot);
+	const EQ::ItemData* weapon = nullptr;
+	if (weaponInst)
+		weapon = weaponInst->GetItem();
+
+	if (weapon)
+		return weapon->Proc.Effect;
+	else
+		return 0;
+}
+
+void Client::PermaGender(uint32 gender)
+{
+	SetBaseGender(gender);
+	Save();
+	SendIllusionPacket(gender);
 }

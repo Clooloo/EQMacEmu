@@ -450,7 +450,7 @@ public:
 	uint32 guild_fte;
 
 	uint32 loot_lockout_timer;
-
+	uint32 instance_spawn_timer_override;
 	
 	// IDs of the guilds who are currently locked out from triggering FTE messages for this NPC and their last disengage time.
 	std::map<uint32, uint32> guild_fte_lockouts;

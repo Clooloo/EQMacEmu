@@ -144,6 +144,9 @@ bool Mob::SpellEffect(Mob* caster, uint16 spell_id, int buffslot, int caster_lev
 					//handles AAs and what not...
 					if(caster) {
 						dmg = caster->GetActSpellDamage(spell_id, dmg, this);
+
+						if (spell_id == SPELL_LIFE_DRAIN)	// Maestro AoE.  Spell data uses type 8, but it's supposed to heal him.  Sony may have hardcoded
+							caster->HealDamage(-dmg);		// this because targettype 20 didn't exist back then and there's seemingly no other way to make it tap
 					}
 
 					dmg = -dmg;
@@ -3423,6 +3426,8 @@ void Mob::BuffFadeBySlot(int slot, bool iRecalcBonuses, bool message, bool updat
 					if (curfp)
 					{
 						curfp = false;
+						if (IsNPC())
+							StopNavigation();
 					}
 				}
 				else

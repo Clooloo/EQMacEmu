@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../common/guilds.h"
 
 // Disgrace: for windows compile
 #ifdef _WINDOWS
@@ -436,6 +437,38 @@ bool Database::SetIPExemption(const char *name, uint8 amount) {
 		return false;
 	}
 
+	if (results.RowsAffected() == 0) {
+		return false;
+	}
+
+	return true;
+}
+
+bool Database::SetMule(const char* charname) {
+	// get account for the character with charname
+	std::string query = StringFormat("SELECT `account_id`, `name` FROM `character_data` WHERE `name` = '%s'", charname);
+
+	auto results = QueryDatabase(query);
+	if (!results.Success() || results.RowCount() != 1) {
+		return false;
+	}
+	auto row = results.begin();
+	uint32 account_id = std::stoul(row[0]);
+	
+	// iterate over every character associated with account and verify they're all level 1 (exclude char with charname)
+	query = StringFormat("SELECT `account_id` FROM `character_data` WHERE `account_id` = %u", account_id);
+	results = QueryDatabase(query);
+	if (results.RowCount() != 1) {
+		Log(Logs::General, Logs::WorldServer, "Can not set mule status on account because more than one character exists on account.");
+		return false;
+	}
+
+	// finally set account to mule status
+	query = StringFormat("UPDATE account SET mule = %d where id = %u AND status < 80", 1, account_id);
+	results = QueryDatabase(query);
+	if (!results.Success()) {
+		return false;
+	}
 	if (results.RowsAffected() == 0) {
 		return false;
 	}
@@ -1390,9 +1423,9 @@ bool Database::AddToNameFilter(const char* name) {
 	return true;
 }
 
-uint32 Database::GetAccountIDFromLSID(uint32 iLSID, char* oAccountName, int16* oStatus, int8* oRevoked) {
+uint32 Database::GetAccountIDFromLSID(uint32 iLSID, char* oAccountName, int16* oStatus, int8* oRevoked, bool* isMule) {
 	uint32 account_id = 0;
-	std::string query = StringFormat("SELECT id, name, status, revoked FROM account WHERE lsaccount_id=%i", iLSID);
+	std::string query = StringFormat("SELECT id, name, status, revoked, mule FROM account WHERE lsaccount_id=%i", iLSID);
 	auto results = QueryDatabase(query);
 
 	if (!results.Success()) {
@@ -1411,6 +1444,8 @@ uint32 Database::GetAccountIDFromLSID(uint32 iLSID, char* oAccountName, int16* o
 			*oStatus = atoi(row[2]);
 		if (oRevoked)
 			*oRevoked = atoi(row[3]);
+		if (isMule)
+			*isMule = atoi(row[4]);
 	}
 
 	return account_id;
@@ -1491,7 +1526,7 @@ bool Database::MoveCharacterToZone(const char* charname, const char* zonename, u
 
 	float safe_x = 0, safe_y = 0, safe_z = 0;
 	GetSafePoints(zoneid, &safe_x, &safe_y, &safe_z);
-	std::string query = StringFormat("UPDATE `character_data` SET `zone_id` = %i, `x` = %0.2f, `y` = %0.2f, `z` = %0.2f WHERE `name` = '%s'", zoneid, safe_x, safe_y, safe_z, charname);
+	std::string query = StringFormat("UPDATE `character_data` SET `zone_id` = %i, `x` = %0.2f, `y` = %0.2f, `z` = %0.2f, `e_zone_guild_id` = %d WHERE `name` = '%s'", zoneid, safe_x, safe_y, safe_z, GUILD_NONE, charname);
 	auto results = QueryDatabase(query);
 
 	if (!results.Success()) {
@@ -1513,7 +1548,7 @@ bool Database::MoveCharacterToZone(uint32 iCharID, const char* iZonename)
 { 
 	float safe_x = 0, safe_y = 0, safe_z = 0;
 	GetSafePoints(iZonename, &safe_x, &safe_y, &safe_z);
-	std::string query = StringFormat("UPDATE `character_data` SET `zone_id` = %i, `x` = %0.2f, `y` = %0.2f, `z` = %0.2f WHERE `id` = %i", GetZoneID(iZonename), safe_x, safe_y, safe_z, iCharID);
+	std::string query = StringFormat("UPDATE `character_data` SET `zone_id` = %i, `x` = %0.2f, `y` = %0.2f, `z` = %0.2f, `e_zone_guild_id` = %d WHERE `id` = %i", GetZoneID(iZonename), safe_x, safe_y, safe_z, GUILD_NONE, iCharID);
 	auto results = QueryDatabase(query);
 
 	if (!results.Success()) {
@@ -1546,8 +1581,8 @@ uint16 Database::MoveCharacterToBind(uint32 CharID)
 		heading = atof(row[4]);
 	}
 
-	query = StringFormat("UPDATE character_data SET zone_id = '%d', x = '%f', y = '%f', z = '%f', heading = '%f' WHERE id = %u", 
-						 zone_id, x, y, z, heading, CharID);
+	query = StringFormat("UPDATE character_data SET zone_id = '%d', x = '%f', y = '%f', z = '%f', heading = '%f', e_zone_guild_id = '%d' WHERE id = %u", 
+						 zone_id, x, y, z, heading, GUILD_NONE, CharID);
 
 	results = QueryDatabase(query);
 	if(!results.Success()) {
@@ -2079,7 +2114,6 @@ void Database::ClearGroupLeader(uint32 gid) {
 
 bool Database::GetAccountRestriction(uint32 acctid, uint16& expansion, bool& mule)
 {
-
 	std::string query = StringFormat("SELECT expansion, mule FROM account WHERE id=%i",acctid);
 	auto results = QueryDatabase(query);
 

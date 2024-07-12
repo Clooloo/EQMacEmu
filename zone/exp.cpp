@@ -65,6 +65,11 @@ float Mob::GetBaseEXP()
 			server_bonus += RuleR(Quarm, ThanksgivingExpBonusOutdoorAmt);
 		}
 	}
+	if (zone && zone->GetGuildID() != GUILD_NONE)
+	{
+		zemmod = RuleR(Quarm, InstanceZEMOverride);
+	}
+
 	float npc_pct = 1.0f;
 	if (IsNPC())
 		npc_pct = static_cast<float>(CastToNPC()->GetExpPercent()) / 100.0f;
@@ -134,14 +139,14 @@ void Client::AddEXP(uint32 in_add_exp, uint8 conlevel, Mob* killed_mob, int16 av
 	if (GetClass() == WARRIOR) class_mult = 10.0f / 9.0f;
 	if (GetClass() == ROGUE) class_mult = 10.0f / 9.05f;
 
-	if (m_epp.married_character_id != 0 && IsGrouped())
+	if (RuleB(Quarm, ErollsiDayEvent) && m_epp.married_character_id != 0 && IsGrouped())
 	{
 		Group* our_group = GetGroup();
 		for (int x = 0; x < MAX_GROUP_MEMBERS; ++x)
 		{
 			if (our_group->members[x] != nullptr && our_group->members[x]->IsClient()) // If Group Member is Client
 			{
-				if (m_epp.married_character_id = our_group->members[x]->CastToClient()->CharacterID())
+				if (m_epp.married_character_id == our_group->members[x]->CastToClient()->CharacterID())
 				{
 					class_mult += 0.20f;
 					Message(CC_Yellow, "You receive a bonus! (Partner)");
@@ -285,6 +290,11 @@ void Client::AddEXP(uint32 in_add_exp, uint8 conlevel, Mob* killed_mob, int16 av
 		aa_lvl_mod = zone->level_exp_mod[GetLevel()].AAExpMod;
 		if (!aa_lvl_mod)
 			aa_lvl_mod = 1.0f;
+
+		if (GetLevel() == 50 && hbm < 1.0f && RuleR(World, CurrentExpansion) < (float)ExpansionEras::KunarkEQEra)
+			hbm = 1.0f;
+		if (GetLevel() == 60 && hbm < 1.0f && RuleR(World, CurrentExpansion) < (float)ExpansionEras::PlanesEQEra)
+			hbm = 1.0f;
 	}
 
 	if (m_epp.perAA<0 || m_epp.perAA>100)
@@ -375,6 +385,15 @@ void Client::AddQuestEXP(uint32 in_add_exp, bool bypass_cap) {
 
 	if(IsMule())
 		return;
+
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
+
 
 	this->EVENT_ITEM_ScriptStopReturn();
 
@@ -792,17 +811,17 @@ uint32 Client::GetEXPForLevel(uint16 check_level, bool aa)
 	else if (check_level == 59)
 		mod = 3.0;
 	else if (check_level == 60)
-		mod = 3.1;
+		mod = 3.0;
 	else if (check_level == 61)
-		mod = 3.3;
+		mod = 3.225;
 	else if (check_level == 62)
-		mod = 3.5;
+		mod = 3.45;
 	else if (check_level == 63)
-		mod = 3.7;
+		mod = 3.675;
 	else if (check_level == 64)
 		mod = 3.9;
 	else
-		mod = 4.1;
+		mod = 4.125;
 
 	uint32 finalxp = uint32(base * playermod * mod);
 
@@ -1240,28 +1259,28 @@ bool Client::IsInLevelRange(uint8 maxlevel)
 
 void Client::GetExpLoss(Mob* killerMob, uint16 spell, int &exploss, uint8 killedby)
 {
-	float loss;
-	uint8 level = GetLevel();
-	if(level >= 1 && level <= 30)
-		loss = 0.08f;
-	if(level >= 31 && level <= 35)
-		loss = 0.075f;
-	if(level >= 36 && level <= 40)
-		loss = 0.07f;
-	if(level >= 41 && level <= 45)
-		loss = 0.065f;
-	if(level >= 46 && level <= 58)
-		loss = 0.06f;
-	if (level == 59)
-		loss = 0.05f;
-	if (level == 60)
-		loss = 0.16f;
-	if (level >= 61)
-		loss = 0.07f;
+	if (GetLevel() < 2)
+	{
+		exploss = 0;
+		return;
+	}
+	int last_level_xp = GetEXPForLevel(GetLevel()) - GetEXPForLevel(GetLevel() - 1);
+	if (GetLevel() >= 25)
+		exploss = last_level_xp / 4;
+	else
+		exploss = last_level_xp * GetLevel() / 100;
 
-	int requiredxp = GetEXPForLevel(level + 1) - GetEXPForLevel(level);
-	exploss=(int)((float)requiredxp * (loss * RuleR(Character, EXPLossMultiplier)));
+	exploss /= 2;						// death loss was cut in half on May 24 1999
+	exploss = exploss * 9 / 10;			// death loss was based on warrior exp.  since we don't have class bonuses or penalties, everybody is reduced here
+	if (exploss > 6000000)
+		exploss = 6000000;
 
+	if (GetLevel() == 31 || GetLevel() == 36 || GetLevel() == 41 || GetLevel() == 46)
+		exploss /= 2;					// these post-hell levels had double exp loss until March 19 2002
+
+	exploss = static_cast<int>(static_cast<float>(exploss) * RuleR(Character, EXPLossMultiplier));
+
+	// Death exp loss started at level 6 until March 19 2002, then it was 11
 	if( (level < RuleI(Character, DeathExpLossLevel)) || (level > RuleI(Character, DeathExpLossMaxLevel)) || IsBecomeNPC() )
 	{
 		exploss = 0;

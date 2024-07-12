@@ -276,6 +276,7 @@ int command_init(void)
 		command_add("logs", "Manage anything to do with logs.", AccountStatus::GMCoder, command_logs) ||
 		command_add("logtest", "Performs log performance testing.", AccountStatus::GMImpossible, command_logtest) ||
 
+		command_add("makemule", "Flags the account of the player who runs the command as a mule.", AccountStatus::Player, command_makemule) ||
 		command_add("makepet", "[level] [class] [race] [texture] - Make a pet.", AccountStatus::QuestMaster, command_makepet) ||
 		command_add("mana", "- Fill your or your target's mana.", AccountStatus::GMMgmt, command_mana) ||
 		command_add("manaburn", "- Use AA Wizard class skill manaburn on target.", AccountStatus::GMAreas, command_manaburn) ||
@@ -4194,6 +4195,12 @@ void command_showquake(Client *c, const Seperator *sep)
 		return;
 	}
 
+	if (c->GuildRank() == 0)
+	{
+		c->Message(CC_Default, "You must be an officer rank or higher to use this command.");
+		return;
+	}
+
 	if (zone)
 	{
 		ServerEarthquakeImminent_Struct quake_struct;
@@ -4557,29 +4564,13 @@ void command_corpse(Client *c, const Seperator *sep)
 			uint32 corpseid;
 			Client *t = c;
 
-			if (c->GetTarget() && c->GetTarget()->IsClient() && c->GetGM())
-				t = c->GetTarget()->CastToClient();
-			else
-			{
-				c->Message(CC_Default, "You must first turn your GM flag on and select a target!");
-				return;
-			}
-
 			if (!sep->IsNumber(2))
 			{
-				c->Message(CC_Default, "Usage: #corpse restore [corpse_id] [charid].");
+				c->Message(CC_Default, "Usage: #corpse restore [corpse_id].");
 				return;
 			}
 			else
 				corpseid = atoi(sep->arg[2]);
-
-			uint32 charid = 0;
-			if (!sep->arg[3][0])
-			{
-				charid = t->CharacterID();
-			}
-			else
-				charid = database.GetCharacterID(sep->arg[3]);
 
 			if(!database.IsValidCorpseBackup(corpseid))
 			{
@@ -4595,7 +4586,7 @@ void command_corpse(Client *c, const Seperator *sep)
 			{
 				if(database.CopyBackupCorpse(corpseid))
 				{
-					Corpse* PlayerCorpse = database.SummonCharacterCorpse(corpseid, charid, t->GetZoneID(), zone->GetGuildID(), t->GetPosition());
+					Corpse* PlayerCorpse = database.SummonCharacterCorpse(corpseid, 0, zone->GetZoneID(), zone->GetGuildID(), c->GetPosition());
 
 					if (!PlayerCorpse)
 						c->Message(CC_Default, "Summoning of backup corpse failed. Please escalate this issue.");
@@ -10972,6 +10963,57 @@ void command_skilldifficulty(Client *c, const Seperator *sep)
 		c->Message(CC_Default, "#skills reload - Reloads skill difficulty in each zone.");
 		c->Message(CC_Default, "#skills values - Displays target's skill values.");
 	}
+}
+
+void command_makemule(Client* c, const Seperator* sep)
+{
+	if (!c) {
+		return;
+	}
+	if (c->IsMule()) {
+		c->Message(CC_Red, "Account is already flagged as a mule.");
+		return;
+	}
+
+
+	if (RuleB(Quarm, RestrictIksarsToKunark))
+	{
+		if (c->GetBaseRace() == IKSAR)
+		{
+			c->Message(CC_Red, "Iksars cannot be mules during the pre-launch period.");
+			return;
+		}
+	}
+
+	if (c->GetLevel() < RuleI(Chat, GlobalChatLevelLimit)) {
+		c->Message(CC_Red, "To flag an account as a mule you must first level to %i.", RuleI(Chat, GlobalChatLevelLimit));
+		return;
+	}
+	if (c->IsMuleInitiated() && sep->arg[1][0] != 0 && strcasecmp(sep->arg[1], "confirm") == 0) {
+		if (!database.SetMule(c->GetName())) {
+			c->Message(CC_Red, "Could not set mule status for this account. More than one character already exists on account.");
+		}
+		else {
+			c->Message(CC_Green, "Successfully flagged your account as a mule.");
+			c->SetLevel(1);
+			if (RuleB(Quarm, EastCommonMules)) {
+				c->SetBindPoint(ecommons, glm::vec3(-164.0f, -1651.0f, 4.0f));
+			}
+			else {
+				c->SetBindPoint(bazaar, glm::vec3(140.0f, -821.0f, 5.0f));
+			}
+			c->WorldKick();
+		}
+		return;
+	}
+	if (sep->arg[1][0] != 0 && strcasecmp(sep->arg[1], "confirm") != 0) {
+		c->Message(CC_Red, "To confirm your mule account you must type: #makemule confirm");
+		return;
+	}
+	c->SetMuleInitiated(true);
+	c->Message(CC_Default, "You have initiated the process to make this account a mule. Mules can not leave designated trader zones or level past 1.");
+	c->Message(CC_Default, "Once an account is made a mule it can not be undone. If successful then you will be disconnected and must re-enter the world.");
+	c->Message(CC_Default, "If you wish to proceed then type: #makemule confirm");
 }
 
 void command_mule(Client *c, const Seperator *sep)

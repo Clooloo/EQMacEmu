@@ -152,6 +152,8 @@ public:
 
 	Timer GetInitgridsTimer();
 
+	bool AllowManastoneClick();
+
 	bool RemoveSpawnEntry(uint32 spawnid);
 	bool RemoveSpawnGroup(uint32 in_id);
 

@@ -202,21 +202,52 @@ void Lua_Client::SetDeity(int v) {
 
 void Lua_Client::AddEXP(uint32 add_exp, int conlevel, Lua_Mob other) {
 	Lua_Safe_Call_Void();
+	
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
 	self->AddEXP(add_exp, conlevel, other);
 }
 
 void Lua_Client::SetEXP(uint32 set_exp, uint32 set_aaxp) {
 	Lua_Safe_Call_Void();
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
 	self->SetEXP(set_exp, set_aaxp);
 }
 
 void Lua_Client::SetEXP(uint32 set_exp, uint32 set_aaxp, bool resexp) {
 	Lua_Safe_Call_Void();
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
 	self->SetEXP(set_exp, set_aaxp, resexp);
 }
 
 void Lua_Client::AddEXPPercent(uint8 percent, uint8 level) {
 	Lua_Safe_Call_Void();
+	
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
+
 	self->AddEXPPercent(percent, level);
 }
 
@@ -968,11 +999,29 @@ uint32 Lua_Client::GetIP() {
 
 void Lua_Client::AddLevelBasedExp(int exp_pct) {
 	Lua_Safe_Call_Void();
+	
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
+
 	self->AddLevelBasedExp(exp_pct);
 }
 
 void Lua_Client::AddLevelBasedExp(int exp_pct, int max_level) {
 	Lua_Safe_Call_Void();
+
+	if (RuleB(Quarm, EnableQuestBasedXPLimit))
+	{
+		if (self->GetLevel() >= RuleI(Quarm, QuestBasedXPLimitLevel))
+		{
+			return;
+		}
+	}
+
 	self->AddLevelBasedExp(exp_pct, max_level);
 }
 
@@ -1254,6 +1303,11 @@ int Lua_Client::GetHandToHandDelay() {
 	return self->GetHandToHandDelay();
 }
 
+void Lua_Client::PermaGender(uint32 in_Gender) {
+	Lua_Safe_Call_Void();
+	self->PermaGender(in_Gender);
+}
+
 luabind::scope lua_register_client() {
 	return luabind::class_<Lua_Client, Lua_Mob>("Client")
 		.def(luabind::constructor<>())
@@ -1486,7 +1540,8 @@ luabind::scope lua_register_client() {
 		.def("IsMarried", (bool(Lua_Client::*)())&Lua_Client::IsMarried)
 		.def("SetMarried", (void(Lua_Client::*)(const char*))&Lua_Client::SetMarried)
 		.def("SetTemporaryLastName", (void(Lua_Client::*)(const char*))&Lua_Client::SetTemporaryLastName)
-		.def("HasTemporaryLastName", (bool(Lua_Client::*)(void))&Lua_Client::HasTemporaryLastName);
+		.def("HasTemporaryLastName", (bool(Lua_Client::*)(void))&Lua_Client::HasTemporaryLastName)
+		.def("PermaGender", (void(Lua_Client::*)(uint32))&Lua_Client::PermaGender);
 }
 
 luabind::scope lua_register_inventory_where() {

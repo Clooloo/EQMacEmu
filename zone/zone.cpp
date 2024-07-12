@@ -77,7 +77,7 @@ Mutex MZoneShutdown;
 
 volatile bool is_zone_loaded = false;
 Zone* zone = 0;
-
+const static std::set<std::string> arrClassicPlanes = { "hateplane", "airplane", "fearplane" };
 void UpdateWindowTitle(char* iNewTitle);
 
 bool Zone::Bootup(uint32 iZoneID, bool iStaticZone, uint32 iGuildID) {
@@ -1122,6 +1122,9 @@ void Zone::ReloadStaticData() {
 	LogInfo("Reloading KeyRing Data...");
 	KeyRingDataList.Clear();
 	zone->LoadKeyRingData(&KeyRingDataList);
+
+	LogInfo("Reloading Zone Data...");
+	database.GetZoneLongName(short_name, &long_name, file_name, &m_SafePoint.x, &m_SafePoint.y, &m_SafePoint.z, &pgraveyard_id, &pgraveyard_timer, &pMaxClients);
 
 	//load the zone config file.
 	if (!LoadZoneCFG(zone->GetShortName(), true)) { // try loading the zone name...
@@ -2803,4 +2806,15 @@ void Zone::LoadGrids()
 Timer Zone::GetInitgridsTimer()
 {
 	return initgrids_timer;
+}
+
+bool Zone::AllowManastoneClick()
+{
+	if (GetZoneExpansion() != ClassicEQ) {
+		return false;
+	}
+	if (arrClassicPlanes.find(GetShortName()) != arrClassicPlanes.end()) {
+		return false;
+	}
+	return true;
 }

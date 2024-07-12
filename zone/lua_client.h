@@ -255,6 +255,7 @@ public:
 	void QuestReward(Lua_Mob target, luabind::adl::object reward);
 	int GetHandToHandDamage();
 	int GetHandToHandDelay();
+	void PermaGender(uint32 in_Gender);
 	bool IsMarried();
 	void SetMarried(const char*);
 	void SetTemporaryLastName(char*);

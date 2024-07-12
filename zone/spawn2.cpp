@@ -58,6 +58,7 @@ Spawn2::Spawn2(uint32 in_spawn2_id, uint32 spawngroup_id,
 	rand_spawn = in_rand_spawn;
 	raid_target_spawnpoint = in_raid_target_spawnpoint;
 	last_level_attempt = 0;
+	last_instance_spawn_timer_override = 0;
 
 	if(timeleft == 0xFFFFFFFF) 
 	{
@@ -107,6 +108,7 @@ uint32 Spawn2::resetTimer()
 			rspawn = 100;
 	}
 
+
 	if (RuleB(Quarm, EnableRespawnReductionSystem))
 	{
 		if (zone->IsReducedSpawnTimersZone())
@@ -128,6 +130,18 @@ uint32 Spawn2::resetTimer()
 						rspawn = RuleI(Quarm, RespawnReductionLowerBound);
 				}
 			}
+		}
+	}
+
+	if (zone->GetGuildID() != GUILD_NONE)
+	{
+		if (RuleB(Quarm, InstanceAlwaysHasMinimumSpawnTime))
+		{
+			if (last_instance_spawn_timer_override != 0)
+				return last_instance_spawn_timer_override;
+
+			if (rspawn < RuleI(Quarm, InstanceMinimumSpawnTime))
+				rspawn = RuleI(Quarm, InstanceMinimumSpawnTime);
 		}
 	}
 
@@ -309,6 +323,7 @@ bool Spawn2::Process() {
 		npc->SaveGuardPointAnim(anim);
 		npc->SetAppearance((EmuAppearance)anim);
 		last_level_attempt = tmp->level;
+		last_instance_spawn_timer_override = tmp->instance_spawn_timer_override;
 		entity_list.AddNPC(npc);
 		//this limit add must be done after the AddNPC since we need the entity ID.
 		entity_list.LimitAddNPC(npc);

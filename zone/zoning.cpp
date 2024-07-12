@@ -307,10 +307,18 @@ void Client::Handle_OP_ZoneChange(const EQApplicationPacket *app) {
 		}
 	}
 
-	if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && (target_zone_id != bazaar && target_zone_id != nexus && target_zone_id != poknowledge)) {
+	if (RuleB(Quarm, EastCommonMules)) {
+		if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && target_zone_id != ecommons)
+		{
+			zoning_message = ZoningMessage::ZoneNoExperience;
+			Log(Logs::Detail, Logs::Character, "[CLIENT] Character is a mule and cannot leave EC before Luclin!");
+		}
+	}
+	else if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && (target_zone_id != bazaar && target_zone_id != nexus && target_zone_id != poknowledge)) {
 		zoning_message = ZoningMessage::ZoneNoExperience;
 		Log(Logs::Detail, Logs::Character, "[CLIENT] Character is a mule and cannot leave Bazaar/Nexus/PoK!");
 	}
+
 
 	if(zoning_message == ZoningMessage::ZoneSuccess) {
 		//we have successfully zoned
@@ -437,6 +445,52 @@ void Client::DoZoneSuccess(ZoneChange_Struct *zc, uint16 zone_id, uint32 zone_gu
 	zonesummon_id = 0;
 	zonesummon_guildid = 0xFFFFFFFF;
 	zonesummon_ignorerestrictions = 0;
+}
+
+void Client::DoZoneMove(uint16 zone_id, uint32 zone_guild_id, float dest_x, float dest_y, float dest_z, float dest_h) {
+
+	if (zonesummon_id != zone_id && zonesummon_id != 0)
+		zone_id = zonesummon_id;
+
+	if (zonesummon_guildid != zone_guild_id && zonesummon_id != 0)
+		zone_guild_id = zonesummon_guildid;
+
+	/* QS: PlayerLogZone */
+	if (RuleB(QueryServ, PlayerLogZone)) {
+		std::string event_desc = StringFormat("Zoning :: zoneid:%u x:%4.2f y:%4.2f z:%4.2f h:%4.2f zonemode:%d from zoneid:%u", zone_id, dest_x, dest_y, dest_z, dest_h, zone_mode, this->GetZoneID());
+		QServ->PlayerLogEvent(Player_Log_Zoning, this->CharacterID(), event_desc);
+	}
+
+	// fade charmed pets
+	Mob* mypet = GetPet();
+	if (mypet && mypet->IsCharmedPet())
+		FadePetCharmBuff();
+
+	/* Dont clear aggro until the zone is successful */
+	entity_list.RemoveFromHateLists(this);
+	scanarea_timer.Reset(); // prevent mobs from immediately reaggroing before player is actually gone
+
+	EndShield();		// warrior /shield
+
+	// depop pet
+	DepopPet();
+
+	Log(Logs::General, Logs::Status, "Zoning '%s' to: %s (%i) x=%f, y=%f, z=%f", m_pp.name, database.GetZoneName(zone_id), zone_id, dest_x, dest_y, dest_z);
+
+	//set the player's coordinates in the new zone so they have them
+	//when they zone into it
+	m_Position.x = dest_x; //these coordinates will now be saved when ~client is called
+	m_Position.y = dest_y;
+	m_Position.z = dest_z;
+	m_Position.w = dest_h / 2.0f; // fix for zone heading
+	m_pp.heading = dest_h;
+	m_pp.zone_id = zone_id;
+	m_epp.zone_guild_id = zone_guild_id;
+
+	//Force a save so its waiting for them when they zone
+	Save(2);
+
+	m_lock_save_position = true;
 }
 
 void Client::MovePC(const char* zonename, float x, float y, float z, float heading, uint8 ignorerestrictions, ZoneMode zm) {
@@ -1171,7 +1225,30 @@ bool Client::CanBeInZone(uint32 zoneid, uint32 guild_id)
 		return(false);
 	}
 
-	if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && 
+	uint8 zone_expansion = zone->GetZoneExpansion();
+	if (RuleB(Quarm, RestrictIksarsToKunark) && zone)
+	{
+		if (GetBaseRace() == IKSAR && zone_expansion != KunarkEQ)
+		{
+			Message_StringID(CC_Red, NO_EXPAN);
+			return false;
+		}
+		else if (GetBaseRace() != IKSAR && zone_expansion == KunarkEQ)
+		{
+			Message_StringID(CC_Red, NO_EXPAN);
+			return false;
+		}
+	}
+
+	if (RuleB(Quarm, EastCommonMules)) {
+		if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && target_zone_id != ecommons)
+		{
+			Log(Logs::Detail, Logs::Character, "[CLIENT] Character is a mule and cannot leave EC before Luclin!");
+			Message(CC_Red, "Trader accounts may not leave EC before Luclin!");
+			return(false);
+		}
+	} 
+	else if (Admin() < minStatusToIgnoreZoneFlags && IsMule() && 
 		(target_zone_id != bazaar && target_zone_id != nexus && target_zone_id != poknowledge))
 	{
 		Log(Logs::Detail, Logs::Character, "[CLIENT] Character is a mule and cannot leave Bazaar/Nexus/PoK!");

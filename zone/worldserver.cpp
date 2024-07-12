@@ -250,7 +250,7 @@ void WorldServer::Process() {
 				break;
 			WorldToZone_Struct* wtz = (WorldToZone_Struct*) pack->pBuffer;
 
-			if(zone->GetMaxClients() != 0 && numclients >= zone->GetMaxClients())
+			if(zone->GetMaxClients() != 0 && numclients >= zone->GetMaxClients() && !RuleB(Quarm, AllowBypassMaxClientsOnWorldEnter))
 				wtz->response = -1;
 			else
 				wtz->response = 1;

@@ -114,7 +114,7 @@ Mob::Mob(const char* in_name,
 	SetMoving(false);
 	moved=false;
 	m_RewindLocation = glm::vec3();
-	m_LastLocation = glm::vec3();
+	m_LastLocation = glm::vec4();
 	name[0]=0;
 	orig_name[0]=0;
 	clean_name[0]=0;
@@ -1170,12 +1170,7 @@ void Mob::SendPosition(bool everyone, bool ackreq)
 	spu->num_updates = 1; // hack - only one spawn position per update
 	MakeSpawnUpdateNoDelta(&spu->spawn_update);
 	tar_ndx = 20;
-	if (everyone) {
-		entity_list.QueueClientsPosUpdate(this, app, true, ackreq);
-	}
-	else {
-		entity_list.QueueCloseClientsPrecalc(this, app, nullptr, true, nullptr, ackreq);
-	}
+	entity_list.QueueClientsPosUpdate(this, app, true, ackreq);
 
 	//entity_list.QueueCloseClients(this, app, true, 1000, nullptr, false);
 	safe_delete(app);
@@ -1237,11 +1232,11 @@ void Mob::SendPosUpdate(uint8 iSendToSelf)
 			if (CastToClient()->gmhideme)
 				entity_list.QueueClientsStatus(this, app, (iSendToSelf == 0), CastToClient()->Admin(), 255);
 			else
-				entity_list.QueueCloseClientsPrecalc(this, app, nullptr, (iSendToSelf == 0), nullptr, false);
+				entity_list.QueueClientsPosUpdate(this, app, (iSendToSelf == 0), false);
 		}
 		else
 		{
-			entity_list.QueueCloseClientsPrecalc(this, app, nullptr, (iSendToSelf == 0), nullptr, false);
+			entity_list.QueueClientsPosUpdate(this, app, (iSendToSelf == 0), false);
 		}
 		safe_delete(app);
 	}
@@ -4961,9 +4956,11 @@ void Mob::PurgePoison(Client* caster)
 void Mob::ApplyIllusion(const SPDat_Spell_Struct &spell, int i, Mob* caster)
 {
 	uint16 spell_id = spell.id;
+	uint16 spell_base = spell.base[i];
+	float spell_model_size = -1.0f;
 
 	// Gender Illusions
-	if (spell.base[i] == -1)
+	if (spell_base == -1)
 	{
 		int specific_gender = -1;
 		// Male
@@ -4993,9 +4990,10 @@ void Mob::ApplyIllusion(const SPDat_Spell_Struct &spell, int i, Mob* caster)
 	}
 	else // Racial Illusions
 	{
-		int8 gender = Mob::GetDefaultGender(spell.base[i], GetGender());
+		int8 gender = Mob::GetDefaultGender(spell_base, GetGender());
 		// Texture doesn't seem to be in our spell data :I
 		int8 texture = 0;
+		int8 helmtexture = spell.max[i];
 		if (IsRacialIllusion(spell_id))
 		{
 			texture = GetTexture();
@@ -5059,17 +5057,41 @@ void Mob::ApplyIllusion(const SPDat_Spell_Struct &spell, int i, Mob* caster)
 				break;
 			}
 
+			case 1416:
+			{
+				if (GetBaseRace() == GNOME)
+					spell_model_size = 4.0f;
+				break;
+			}
+
+            case 581:
+			case 643:
+            case 644:
+            case 1611:
+            {
+				if (GetBaseRace() == IKSAR && spell_base == SKELETON)
+				{
+					spell_base = IKSAR_SKELETON;
+					helmtexture = GetGender();
+				}
+
+				if (GetBaseRace() == GNOME && spell_id != 581)
+					spell_model_size = 4.0f;
+
+				break;
+            }
+
 			}
 		}
 
 		SendIllusionPacket
 		(
-			spell.base[i],
+			spell_base,
 			gender,
 			texture,
-			spell.max[i], // seems to be 0 for every illusion
+			helmtexture, // seems to be 0 for every illusion
 			0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-			-1.0f // default size
+			spell_model_size // default size
 		);
 
 		this->z_offset = CalcZOffset();

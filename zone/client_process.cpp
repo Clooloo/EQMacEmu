@@ -136,9 +136,6 @@ bool Client::Process() {
 			DoHPRegen();
 		}
 
-		if(client_distance_timer.Enabled() && client_distance_timer.Check())
-			entity_list.UpdateDistances(this);
-
 		if(mana_timer.Check())
 			SendManaUpdatePacket();
 
@@ -1945,6 +1942,7 @@ void Client::OPGMSummon(const EQApplicationPacket *app)
 				szp->x_pos = (float)gms->x;
 				szp->y_pos = (float)gms->y;
 				szp->z_pos = (float)gms->z;
+				szp->zoneguildid = zone->GetGuildID();
 				szp->ignorerestrictions = 2;
 				worldserver.SendPacket(pack);
 				safe_delete(pack);
